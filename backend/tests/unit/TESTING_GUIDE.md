@@ -9,6 +9,33 @@ Complete guide for seeding test data and testing the AgentHub chatbot system.
 1. **Database Setup**: PostgreSQL, Redis, and ChromaDB must be running
 2. **Environment**: Virtual environment activated
 3. **Database Migrated**: Run `alembic upgrade head`
+4. **Environment Variables**: Configure `.env` file (see Configuration section below)
+
+---
+
+## Configuration
+
+### Required Environment Variables
+
+Before testing, ensure your `.env` file has these settings:
+
+```bash
+# Authentication Bypass for Testing
+DISABLE_AUTH=true
+
+# Bearer Token for External API Calls (UAT Accounting API)
+# This token is automatically injected into HTTP tool requests when DISABLE_AUTH=true
+TEST_BEARER_TOKEN=your_uat_api_bearer_token_here
+
+# OpenRouter API Key (for LLM)
+OPENROUTER_API_KEY=sk-or-v1-your_key_here
+```
+
+**Important Notes:**
+- `DISABLE_AUTH=true` bypasses JWT authentication for testing
+- `TEST_BEARER_TOKEN` is used for HTTP tool calls to external APIs (e.g., UAT accounting API)
+- You do NOT need to include bearer tokens in your chat API request body
+- ⚠️ **Remember to set `DISABLE_AUTH=false` before deploying to production!**
 
 ---
 
@@ -112,40 +139,77 @@ Replace `<your_tenant_id>` with the ID from Step 1.
 
 ### Option B: Using cURL
 
-**Basic Chat Request:**
+#### Endpoint 1: `/api/{tenant_id}/chat` (Protected - Requires Auth)
+
+When `DISABLE_AUTH=false`, this endpoint requires a valid JWT token in the Authorization header.
 
 ```bash
 curl -X POST http://localhost:8000/api/<tenant_id>/chat \
   -H "Content-Type: application/json" \
-  -H "X-Tenant-ID: <tenant_id>" \
+  -H "Authorization: Bearer <your_jwt_token>" \
   -d '{
     "user_id": "test_user_001",
-    "message": "What is the debt for customer with MST 0123456789012?",
-    "metadata": {
-      "jwt_token": "test_token_for_demo"
-    }
+    "message": "What is the debt for customer with MST 0123456789012?"
+  }'
+```
+
+#### Endpoint 2: `/api/{tenant_id}/test/chat` (Testing - No Auth Required)
+
+⚠️ **Recommended for Testing**: This endpoint bypasses authentication completely.
+
+**Basic Chat Request:**
+
+```bash
+curl -X POST http://localhost:8000/api/<tenant_id>/test/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "test_user_001",
+    "message": "What is the debt for customer with MST 0123456789012?"
   }'
 ```
 
 **With Session Continuation:**
 
 ```bash
-curl -X POST http://localhost:8000/api/<tenant_id>/chat \
+curl -X POST http://localhost:8000/api/<tenant_id>/test/chat \
   -H "Content-Type: application/json" \
-  -H "X-Tenant-ID: <tenant_id>" \
   -d '{
     "user_id": "test_user_001",
     "session_id": "<session_id_from_previous_response>",
-    "message": "What about salesman JOHN_DOE?",
-    "metadata": {
-      "jwt_token": "test_token_for_demo"
-    }
+    "message": "What about salesman JOHN_DOE?"
   }'
 ```
+
+**Notes:**
+- ✅ No `Authorization` header required
+- ✅ No `jwt_token` in metadata needed
+- ✅ Bearer token for external API calls is automatically injected from `TEST_BEARER_TOKEN` in `.env`
+- ⚠️ This endpoint should be removed or disabled in production!
 
 ---
 
 ### Option C: Using Postman
+
+#### For Testing Endpoint (`/test/chat`)
+
+1. **Import Settings:**
+   - Method: `POST`
+   - URL: `http://localhost:8000/api/<tenant_id>/test/chat`
+
+2. **Headers:**
+   ```
+   Content-Type: application/json
+   ```
+
+3. **Body (JSON):**
+   ```json
+   {
+     "user_id": "test_user_001",
+     "message": "What is the debt for customer with MST 0123456789012?"
+   }
+   ```
+
+#### For Production Endpoint (`/chat` with Auth)
 
 1. **Import Settings:**
    - Method: `POST`
@@ -154,19 +218,76 @@ curl -X POST http://localhost:8000/api/<tenant_id>/chat \
 2. **Headers:**
    ```
    Content-Type: application/json
-   X-Tenant-ID: <your_tenant_id>
+   Authorization: Bearer <your_jwt_token>
    ```
 
 3. **Body (JSON):**
    ```json
    {
      "user_id": "test_user_001",
-     "message": "What is the debt for customer with MST 0123456789012?",
-     "metadata": {
-       "jwt_token": "test_token_for_demo"
-     }
+     "message": "What is the debt for customer with MST 0123456789012?"
    }
    ```
+
+---
+
+## How Bearer Authentication Works
+
+### Two Types of Bearer Tokens
+
+#### 1. **JWT Token** (For Chat API Authentication)
+- **Purpose**: Authenticates the user making the chat request
+- **When Required**: Production mode (`DISABLE_AUTH=false`)
+- **Where**: `Authorization: Bearer <jwt_token>` header
+- **Testing Mode**: Bypassed when `DISABLE_AUTH=true`
+
+#### 2. **External API Bearer Token** (For HTTP Tool Calls)
+- **Purpose**: Authenticates calls to external APIs (e.g., UAT Accounting API)
+- **When Required**: Always (when tools make HTTP requests)
+- **Where**: Automatically injected by the HTTP tool
+- **Testing Mode**: Uses `TEST_BEARER_TOKEN` from `.env`
+- **Production Mode**: Uses JWT token from user session
+
+### Request Flow Example
+
+```
+User Request → Chat API → Agent → HTTP Tool → External API
+                                       ↓
+                                 Bearer Token
+                                 (from TEST_BEARER_TOKEN
+                                  or JWT session)
+```
+
+**In Testing Mode:**
+```bash
+# .env file
+DISABLE_AUTH=true
+TEST_BEARER_TOKEN=uat_api_token_xyz123
+
+# Your request (NO bearer token needed)
+curl -X POST http://localhost:8000/api/{tenant_id}/test/chat \
+  -d '{"user_id": "test", "message": "query debt"}'
+
+# Behind the scenes:
+# → HTTP Tool automatically adds: Authorization: Bearer uat_api_token_xyz123
+# → When calling: https://uat-accounting-api-efms.logtechub.com/api/...
+```
+
+**In Production Mode:**
+```bash
+# .env file
+DISABLE_AUTH=false
+
+# Your request (WITH JWT bearer token)
+curl -X POST http://localhost:8000/api/{tenant_id}/chat \
+  -H "Authorization: Bearer user_jwt_token_abc456" \
+  -d '{"user_id": "user123", "message": "query debt"}'
+
+# Behind the scenes:
+# → HTTP Tool extracts JWT token from session
+# → Adds: Authorization: Bearer user_jwt_token_abc456
+# → When calling: https://uat-accounting-api-efms.logtechub.com/api/...
+```
 
 ---
 
