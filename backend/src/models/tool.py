@@ -15,12 +15,12 @@ class ToolConfig(Base):
 
     tool_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(100), nullable=False)  # Tool name (e.g., "get_customer_debt")
-    base_tool_id = Column(UUID(as_uuid=True), ForeignKey("base_tools.base_tool_id"), nullable=False)
+    base_tool_id = Column(UUID(as_uuid=True), ForeignKey("base_tools.base_tool_id"), nullable=False, index=True)
     config = Column(JSONB, nullable=False)  # Tool-specific config (endpoint, method, headers)
     input_schema = Column(JSONB, nullable=False)  # JSON schema for tool parameters
     output_format_id = Column(UUID(as_uuid=True), ForeignKey("output_formats.format_id"))
     description = Column(Text)  # Tool description for LLM
-    is_active = Column(Boolean, nullable=False, default=True)  # Tool availability
+    is_active = Column(Boolean, nullable=False, default=True, index=True)  # Tool availability
     created_at = Column(TIMESTAMP, nullable=False, default=datetime.utcnow)
     updated_at = Column(
         TIMESTAMP,

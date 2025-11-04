@@ -61,7 +61,7 @@ echo ""
 echo "6. Starting Docker services..."
 if command -v docker-compose &> /dev/null; then
     docker-compose up -d
-    echo "   ✅ Docker services starting (PostgreSQL, Redis, ChromaDB)"
+    echo "   ✅ Docker services starting (PostgreSQL with pgvector, Redis)"
     echo "   Waiting for services to be ready..."
     sleep 5
 else

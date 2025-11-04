@@ -5,9 +5,8 @@ Production-ready multi-tenant chatbot framework using LangChain 0.3+ for agent o
 ## Prerequisites
 
 - Python 3.11+
-- PostgreSQL 15+
+- PostgreSQL 15+ with pgvector extension
 - Redis 7.x
-- ChromaDB (optional, for RAG features)
 
 ## Quick Start
 
@@ -38,7 +37,7 @@ cp .env.example .env
 ### 3. Start Services with Docker Compose
 
 ```bash
-# Start PostgreSQL, Redis, and ChromaDB
+# Start PostgreSQL (with pgvector) and Redis
 docker-compose up -d
 
 # Verify services are running

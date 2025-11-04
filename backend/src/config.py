@@ -19,9 +19,6 @@ class Settings(BaseSettings):
     REDIS_URL: str = Field(default="redis://localhost:6379")
     CACHE_TTL_SECONDS: int = Field(default=3600)
 
-    # ChromaDB Configuration
-    CHROMA_URL: str = Field(default="http://localhost:8001")
-
     # JWT Authentication
     JWT_PUBLIC_KEY: str = Field(default="")
 

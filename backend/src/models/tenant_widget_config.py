@@ -1,7 +1,7 @@
 """Tenant Widget Configuration model for iframe embedding."""
 from datetime import datetime
-from sqlalchemy import Column, String, Text, Boolean, Integer, JSON, TIMESTAMP, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Text, Boolean, Integer, TIMESTAMP, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 import uuid
 
@@ -32,7 +32,7 @@ class TenantWidgetConfig(Base):
     placeholder_text = Column(String(255), default="Type your message...")
 
     # Security Settings
-    allowed_domains = Column(JSON, default=list)  # Whitelist of parent domains
+    allowed_domains = Column(JSONB, default=list)  # Whitelist of parent domains
     max_session_duration = Column(Integer, default=3600)  # Seconds
     rate_limit_per_minute = Column(Integer, default=20)  # Messages per minute
 

@@ -1,6 +1,6 @@
 """Agent configuration and agent-tool junction models."""
 from datetime import datetime
-from sqlalchemy import Column, String, Text, Boolean, Integer, TIMESTAMP, ForeignKey, PrimaryKeyConstraint
+from sqlalchemy import Column, String, Text, Boolean, Integer, TIMESTAMP, ForeignKey, PrimaryKeyConstraint, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -20,7 +20,7 @@ class AgentConfig(Base):
     default_output_format_id = Column(UUID(as_uuid=True), ForeignKey("output_formats.format_id"))
     description = Column(Text)  # Agent description
     handler_class = Column(String(255), nullable=True, default="services.domain_agents.DomainAgent")  # Python class path for custom logic
-    is_active = Column(Boolean, nullable=False, default=True)  # Agent availability
+    is_active = Column(Boolean, nullable=False, default=True, index=True)  # Agent availability
     created_at = Column(TIMESTAMP, nullable=False, default=datetime.utcnow)
     updated_at = Column(
         TIMESTAMP,
@@ -45,6 +45,7 @@ class AgentTools(Base):
     __tablename__ = "agent_tools"
     __table_args__ = (
         PrimaryKeyConstraint('agent_id', 'tool_id'),
+        Index('ix_agent_tools_agent_priority', 'agent_id', 'priority'),
     )
 
     agent_id = Column(UUID(as_uuid=True), ForeignKey("agent_configs.agent_id"), nullable=False)

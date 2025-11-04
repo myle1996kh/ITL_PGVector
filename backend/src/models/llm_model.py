@@ -1,6 +1,6 @@
 """LLM Model representing available language models from various providers."""
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, TIMESTAMP, Boolean, DECIMAL
+from sqlalchemy import Column, String, Integer, TIMESTAMP, Boolean, DECIMAL, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 import uuid
@@ -12,6 +12,9 @@ class LLMModel(Base):
     """LLM Model - available language models from various providers."""
 
     __tablename__ = "llm_models"
+    __table_args__ = (
+        Index('ix_llm_models_provider_model', 'provider', 'model_name'),
+    )
 
     llm_model_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     provider = Column(String(50), nullable=False)  # openai/gemini/anthropic/openrouter
@@ -19,7 +22,7 @@ class LLMModel(Base):
     context_window = Column(Integer, nullable=False)  # Max context window in tokens
     cost_per_1k_input_tokens = Column(DECIMAL(10, 6), nullable=False)  # Input token cost (USD)
     cost_per_1k_output_tokens = Column(DECIMAL(10, 6), nullable=False)  # Output token cost (USD)
-    is_active = Column(Boolean, nullable=False, default=True)  # Model availability
+    is_active = Column(Boolean, nullable=False, default=True, index=True)  # Model availability
     capabilities = Column(JSONB)  # Model capabilities (e.g., {"vision": true})
     created_at = Column(TIMESTAMP, nullable=False, default=datetime.utcnow)
 

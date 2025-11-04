@@ -16,7 +16,7 @@ class Tenant(Base):
     tenant_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
     domain = Column(String(255), unique=True)
-    status = Column(String(50), nullable=False, default="active")
+    status = Column(String(50), nullable=False, default="active", index=True)
     created_at = Column(TIMESTAMP, nullable=False, default=datetime.utcnow)
     updated_at = Column(
         TIMESTAMP,

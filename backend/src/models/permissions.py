@@ -17,7 +17,7 @@ class TenantAgentPermission(Base):
 
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.tenant_id"), nullable=False)
     agent_id = Column(UUID(as_uuid=True), ForeignKey("agent_configs.agent_id"), nullable=False)
-    enabled = Column(Boolean, nullable=False, default=True)  # Permission status
+    enabled = Column(Boolean, nullable=False, default=True, index=True)  # Permission status
     output_override_id = Column(UUID(as_uuid=True), ForeignKey("output_formats.format_id"))
     created_at = Column(TIMESTAMP, nullable=False, default=datetime.utcnow)
     updated_at = Column(
@@ -46,7 +46,7 @@ class TenantToolPermission(Base):
 
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.tenant_id"), nullable=False)
     tool_id = Column(UUID(as_uuid=True), ForeignKey("tool_configs.tool_id"), nullable=False)
-    enabled = Column(Boolean, nullable=False, default=True)  # Permission status
+    enabled = Column(Boolean, nullable=False, default=True, index=True)  # Permission status
     created_at = Column(TIMESTAMP, nullable=False, default=datetime.utcnow)
 
     # Relationships

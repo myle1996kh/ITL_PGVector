@@ -15,7 +15,7 @@ class TenantLLMConfig(Base):
 
     config_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.tenant_id"), nullable=False, unique=True)
-    llm_model_id = Column(UUID(as_uuid=True), ForeignKey("llm_models.llm_model_id"), nullable=False)
+    llm_model_id = Column(UUID(as_uuid=True), ForeignKey("llm_models.llm_model_id"), nullable=False, index=True)
     encrypted_api_key = Column(Text, nullable=False)  # Fernet-encrypted API key
     rate_limit_rpm = Column(Integer, default=60)  # Requests per minute limit
     rate_limit_tpm = Column(Integer, default=10000)  # Tokens per minute limit

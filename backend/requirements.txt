@@ -22,7 +22,6 @@ pgvector>=0.3.5
 # Vector Embeddings and RAG
 sentence-transformers>=3.3.0
 pypdf>=5.1.0
-chromadb>=0.4.0  # Keep for backward compatibility during migration
 
 # Caching
 redis>=5.0.0

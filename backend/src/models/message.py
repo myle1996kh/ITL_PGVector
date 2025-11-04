@@ -1,6 +1,6 @@
 """Message model for individual chat messages within sessions."""
 from datetime import datetime
-from sqlalchemy import Column, String, Text, TIMESTAMP, ForeignKey
+from sqlalchemy import Column, String, Text, TIMESTAMP, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 import uuid
@@ -12,6 +12,9 @@ class Message(Base):
     """Message - individual chat messages within sessions."""
 
     __tablename__ = "messages"
+    __table_args__ = (
+        Index('ix_messages_session_timestamp', 'session_id', 'timestamp'),
+    )
 
     message_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id"), nullable=False)
