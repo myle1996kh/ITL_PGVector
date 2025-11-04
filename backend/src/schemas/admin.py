@@ -136,6 +136,17 @@ class KnowledgeBaseStatsResponse(BaseModel):
     document_count: int
 
 
+class PDFUploadResponse(BaseModel):
+    """Response for PDF upload and processing."""
+    success: bool
+    tenant_id: str
+    filename: str
+    document_name: str
+    chunk_count: int
+    collection_name: str
+    document_ids: List[str]
+
+
 # Common Response Schemas
 
 class MessageResponse(BaseModel):

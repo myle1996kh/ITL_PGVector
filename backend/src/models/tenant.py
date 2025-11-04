@@ -30,6 +30,7 @@ class Tenant(Base):
     agent_permissions = relationship("TenantAgentPermission", back_populates="tenant")
     tool_permissions = relationship("TenantToolPermission", back_populates="tenant")
     llm_config = relationship("TenantLLMConfig", back_populates="tenant", uselist=False)
+    widget_config = relationship("TenantWidgetConfig", back_populates="tenant", uselist=False)
 
     def __repr__(self):
         return f"<Tenant(tenant_id={self.tenant_id}, name={self.name}, status={self.status})>"

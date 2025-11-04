@@ -1,5 +1,5 @@
 """SupervisorAgent for routing user messages to domain agents."""
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from langchain_core.messages import HumanMessage, SystemMessage
 from sqlalchemy.orm import Session
 from src.services.llm_manager import llm_manager
@@ -35,7 +35,7 @@ Response Format:
 Respond with ONLY ONE of these: {agent_names}MULTI_INTENT", or "UNCLEAR"
 NO explanations, NO additional text."""
 
-    def __init__(self, db: Session, tenant_id: str, jwt_token: str):
+    def __init__(self, db: Session, tenant_id: str, jwt_token: str, session_id: Optional[str] = None):
         """
         Initialize supervisor agent.
 
@@ -43,10 +43,12 @@ NO explanations, NO additional text."""
             db: Database session
             tenant_id: Tenant UUID
             jwt_token: User JWT token
+            session_id: Optional session ID for conversation memory
         """
         self.db = db
         self.tenant_id = tenant_id
         self.jwt_token = jwt_token
+        self.session_id = session_id
 
         # Initialize LLM for routing
         self.llm = llm_manager.get_llm_for_tenant(db, tenant_id)
@@ -119,7 +121,8 @@ NO explanations, NO additional text."""
                 agent_name,
                 self.tenant_id,
                 self.jwt_token,
-                handler_class=handler_class  # Pass pre-loaded handler_class
+                handler_class=handler_class,  # Pass pre-loaded handler_class
+                session_id=self.session_id  # Pass session_id for conversation memory
             )
 
             response = await agent.invoke(user_message)
@@ -171,10 +174,16 @@ NO explanations, NO additional text."""
 
         Returns:
             Agent name or special status (MULTI_INTENT, UNCLEAR)
+
+        Note:
+            Supervisor does NOT use conversation history for intent detection
+            to avoid confusion. Only current message is analyzed for routing.
+            Domain agents will use history for actual conversation context.
         """
         # Add language hint to prompt for better routing
         language_hint = f"\nUser's language: {language}. Route appropriately and respond in user's language."
 
+        # Only use current message for intent detection (no history)
         messages = [
             SystemMessage(content=self.supervisor_prompt + language_hint),
             HumanMessage(content=user_message)

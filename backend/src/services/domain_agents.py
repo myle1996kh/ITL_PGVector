@@ -1,6 +1,6 @@
 """Domain agent implementations using LangChain."""
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from langchain_core.messages import HumanMessage, SystemMessage
 from sqlalchemy.orm import Session
 from src.services.llm_manager import llm_manager
@@ -20,7 +20,8 @@ class DomainAgent:
         db: Session,
         agent_id: str,
         tenant_id: str,
-        jwt_token: str
+        jwt_token: str,
+        session_id: Optional[str] = None
     ):
         """
         Initialize domain agent.
@@ -30,11 +31,13 @@ class DomainAgent:
             agent_id: Agent UUID
             tenant_id: Tenant UUID
             jwt_token: User JWT token
+            session_id: Optional session ID for conversation memory
         """
         self.db = db
         self.agent_id = agent_id
         self.tenant_id = tenant_id
         self.jwt_token = jwt_token
+        self.session_id = session_id
 
         # Load agent configuration
         self.agent_config = db.query(AgentConfig).filter(
@@ -188,6 +191,8 @@ If an entity is not mentioned, omit it from the entities object."""
         Returns:
             Agent response dictionary
         """
+        from src.services.conversation_memory import get_conversation_history
+
         try:
             # Extract intent and entities from user message
             detected_intent, initial_entities = await self._extract_intent_and_entities(user_message)
@@ -237,11 +242,28 @@ For each tool:
 - If YES → Call the tool with those parameters NOW
 - If NO → Ask user for missing parameters (only if necessary)"""
 
-                # Create messages
-                messages = [
-                    SystemMessage(content=system_prompt),
-                    HumanMessage(content=user_message)
-                ]
+                # Create messages with conversation history
+                messages = [SystemMessage(content=system_prompt)]
+
+                # Load conversation history if available
+                if self.session_id:
+                    history = get_conversation_history(
+                        self.db,
+                        self.session_id,
+                        max_messages=15,  # Last 15 messages for domain agents
+                        include_system=False
+                    )
+                    messages.extend(history)
+
+                    logger.debug(
+                        "domain_agent_using_history",
+                        agent_name=self.agent_config.name,
+                        session_id=self.session_id,
+                        history_length=len(history)
+                    )
+
+                # Add current user message
+                messages.append(HumanMessage(content=user_message))
 
                 # Bind tools to LLM
                 llm_with_tools = self.llm.bind_tools(self.tools)
@@ -317,11 +339,27 @@ For each tool:
                             )
                             tool_results[tool_id] = {"error": str(e)}
             else:
-                # No tools available, just invoke LLM
-                messages = [
-                    SystemMessage(content=self.agent_config.prompt_template),
-                    HumanMessage(content=user_message)
-                ]
+                # No tools available, just invoke LLM with conversation history
+                messages = [SystemMessage(content=self.agent_config.prompt_template)]
+
+                # Load conversation history if available
+                if self.session_id:
+                    history = get_conversation_history(
+                        self.db,
+                        self.session_id,
+                        max_messages=15,
+                        include_system=False
+                    )
+                    messages.extend(history)
+
+                    logger.debug(
+                        "domain_agent_using_history_no_tools",
+                        agent_name=self.agent_config.name,
+                        session_id=self.session_id,
+                        history_length=len(history)
+                    )
+
+                messages.append(HumanMessage(content=user_message))
                 response = await self.llm.ainvoke(messages)
 
             logger.info(
@@ -464,7 +502,8 @@ class AgentFactory:
         agent_name: str,
         tenant_id: str,
         jwt_token: str,
-        handler_class: str = None
+        handler_class: str = None,
+        session_id: Optional[str] = None
     ) -> DomainAgent:
         """
         Create domain agent by name with dynamic class loading.
@@ -475,6 +514,7 @@ class AgentFactory:
             tenant_id: Tenant UUID
             jwt_token: User JWT token
             handler_class: Optional pre-loaded handler_class path (avoids re-query)
+            session_id: Optional session ID for conversation memory
 
         Returns:
             Domain agent instance
@@ -517,8 +557,8 @@ class AgentFactory:
                 tenant_id=tenant_id
             )
 
-            # Create and return agent instance
-            return AgentClass(db, str(agent_config.agent_id), tenant_id, jwt_token)
+            # Create and return agent instance with session_id
+            return AgentClass(db, str(agent_config.agent_id), tenant_id, jwt_token, session_id)
 
         except (ImportError, AttributeError) as e:
             logger.error(
@@ -534,4 +574,4 @@ class AgentFactory:
                 agent_name=agent_name,
                 tenant_id=tenant_id
             )
-            return DomainAgent(db, str(agent_config.agent_id), tenant_id, jwt_token)
+            return DomainAgent(db, str(agent_config.agent_id), tenant_id, jwt_token, session_id)

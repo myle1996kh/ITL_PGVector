@@ -1,6 +1,9 @@
 """Admin API endpoints for knowledge base management."""
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Path
+import os
+import tempfile
+from pathlib import Path as FilePath
+from fastapi import APIRouter, Depends, HTTPException, Path, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from src.config import get_db
 from src.models.tenant import Tenant
@@ -9,6 +12,7 @@ from src.schemas.admin import (
     DocumentIngestResponse,
     KnowledgeBaseStatsResponse,
     MessageResponse,
+    PDFUploadResponse,
 )
 from src.services.rag_service import get_rag_service
 from src.middleware.auth import require_admin_role
@@ -215,4 +219,106 @@ async def delete_documents(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete documents: {str(e)}"
+        )
+
+
+@router.post("/tenants/{tenant_id}/knowledge/upload-pdf", response_model=PDFUploadResponse)
+async def upload_pdf(
+    tenant_id: str = Path(..., description="Tenant UUID"),
+    file: UploadFile = File(..., description="PDF file to upload"),
+    document_name: str = Form(None, description="Optional document name"),
+    db: Session = Depends(get_db),
+    admin_payload: dict = Depends(require_admin_role),
+) -> PDFUploadResponse:
+    """
+    Upload and process a PDF file into tenant's knowledge base.
+
+    This endpoint:
+    1. Validates the PDF file
+    2. Extracts text and splits into chunks (1000 chars, 200 overlap)
+    3. Generates embeddings using all-MiniLM-L6-v2
+    4. Stores in PgVector with multi-tenant isolation
+
+    Requires admin role in JWT.
+    """
+    try:
+        # Validate tenant exists
+        tenant = db.query(Tenant).filter(Tenant.tenant_id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+
+        # Validate file is PDF
+        if not file.filename.lower().endswith('.pdf'):
+            raise HTTPException(
+                status_code=400,
+                detail="Only PDF files are supported"
+            )
+
+        # Get RAG service
+        rag_service = get_rag_service()
+
+        # Save uploaded file to temporary location
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+            # Read file content
+            content = await file.read()
+            tmp_file.write(content)
+            tmp_file_path = tmp_file.name
+
+        try:
+            # Prepare metadata
+            additional_metadata = {
+                "uploaded_by_admin": admin_payload.get("user_id"),
+                "original_filename": file.filename,
+            }
+            if document_name:
+                additional_metadata["document_name"] = document_name
+
+            # Process PDF: Load → Chunk → Enrich → Embed → Store
+            ingest_result = rag_service.ingest_pdf(
+                tenant_id=tenant_id,
+                pdf_path=tmp_file_path,
+                additional_metadata=additional_metadata
+            )
+
+            if not ingest_result.get("success"):
+                raise HTTPException(
+                    status_code=500,
+                    detail=ingest_result.get("error", "Failed to process PDF")
+                )
+
+            logger.info(
+                "pdf_uploaded_by_admin",
+                admin_user=admin_payload.get("user_id"),
+                tenant_id=tenant_id,
+                filename=file.filename,
+                chunk_count=ingest_result.get("document_count"),
+            )
+
+            return PDFUploadResponse(
+                success=True,
+                tenant_id=tenant_id,
+                filename=file.filename,
+                document_name=document_name or file.filename,
+                chunk_count=ingest_result.get("document_count"),
+                collection_name=ingest_result.get("collection_name"),
+                document_ids=ingest_result.get("document_ids"),
+            )
+
+        finally:
+            # Clean up temporary file
+            if os.path.exists(tmp_file_path):
+                os.unlink(tmp_file_path)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "upload_pdf_error",
+            tenant_id=tenant_id,
+            filename=file.filename if file else "unknown",
+            error=str(e)
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to upload PDF: {str(e)}"
         )

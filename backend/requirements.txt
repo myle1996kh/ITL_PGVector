@@ -10,11 +10,19 @@ langchain-openai>=0.2.0
 langchain-google-genai>=2.0.0
 langchain-anthropic>=0.2.0
 langchain-community>=0.3.0
+langchain-postgres>=0.0.12
+langchain-text-splitters>=0.3.0
 
 # Database
 sqlalchemy>=2.0.0
 alembic>=1.12.0
 psycopg2-binary>=2.9.0
+pgvector>=0.3.5
+
+# Vector Embeddings and RAG
+sentence-transformers>=3.3.0
+pypdf>=5.1.0
+chromadb>=0.4.0  # Keep for backward compatibility during migration
 
 # Caching
 redis>=5.0.0

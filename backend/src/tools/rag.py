@@ -1,9 +1,8 @@
-"""RAG Tool for ChromaDB knowledge base retrieval."""
+"""RAG Tool for PgVector knowledge base retrieval."""
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field, create_model
-import chromadb
-from chromadb.config import Settings as ChromaSettings
 from src.tools.base import BaseTool
+from src.services.rag_service import get_rag_service
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -11,14 +10,12 @@ logger = get_logger(__name__)
 
 class RAGToolConfig(BaseModel):
     """Configuration for RAG tool."""
-    collection_name: str = Field(..., description="ChromaDB collection name")
     top_k: int = Field(default=5, ge=1, le=20, description="Number of documents to retrieve")
-    chromadb_host: str = Field(default="localhost", description="ChromaDB host")
-    chromadb_port: int = Field(default=8001, description="ChromaDB port")
+    collection_name: Optional[str] = Field(default=None, description="[Deprecated] Collection name (now ignored, kept for backward compatibility)")
 
 
 class RAGTool(BaseTool):
-    """Tool for retrieving relevant documents from ChromaDB knowledge base."""
+    """Tool for retrieving relevant documents from PgVector knowledge base."""
 
     def __init__(
         self,
@@ -31,37 +28,25 @@ class RAGTool(BaseTool):
         Initialize RAG Tool.
 
         Args:
-            config: Tool configuration (collection_name, top_k, chromadb_host, chromadb_port)
+            config: Tool configuration (top_k)
             input_schema: JSON schema for tool inputs (query field)
             tenant_id: Tenant UUID for isolation
-            jwt_token: Optional JWT token (not used for ChromaDB)
+            jwt_token: Optional JWT token (not used for RAG)
         """
         super().__init__(config, input_schema, tenant_id, jwt_token)
 
         # Parse config
         self.rag_config = RAGToolConfig(**config)
 
-        # Initialize ChromaDB client
+        # Get RAG service (singleton with PgVector backend)
         try:
-            self.client = chromadb.HttpClient(
-                host=self.rag_config.chromadb_host,
-                port=self.rag_config.chromadb_port,
-                settings=ChromaSettings(
-                    anonymized_telemetry=False,
-                ),
-            )
-
-            # Get or create collection (tenant-specific)
-            self.collection = self.client.get_or_create_collection(
-                name=self.rag_config.collection_name,
-                metadata={"tenant_id": tenant_id}
-            )
+            self.rag_service = get_rag_service()
 
             logger.info(
                 "rag_tool_initialized",
                 tenant_id=tenant_id,
-                collection=self.rag_config.collection_name,
                 top_k=self.rag_config.top_k,
+                backend="pgvector"
             )
         except Exception as e:
             logger.error(
@@ -73,7 +58,7 @@ class RAGTool(BaseTool):
 
     def _execute(self, **kwargs) -> Dict[str, Any]:
         """
-        Execute RAG retrieval.
+        Execute RAG retrieval using PgVector similarity search.
 
         Args:
             query: Search query string
@@ -95,44 +80,27 @@ class RAGTool(BaseTool):
             }
 
         try:
-            # Query ChromaDB
-            results = self.collection.query(
-                query_texts=[query],
-                n_results=self.rag_config.top_k,
-                include=["documents", "metadatas", "distances"]
+            # Query knowledge base using RAGService
+            result = self.rag_service.query_knowledge_base(
+                tenant_id=self.tenant_id,
+                query=query,
+                top_k=self.rag_config.top_k
             )
-
-            # Format results
-            documents = []
-            if results and results["documents"] and len(results["documents"]) > 0:
-                for i, doc in enumerate(results["documents"][0]):
-                    documents.append({
-                        "content": doc,
-                        "metadata": results["metadatas"][0][i] if results["metadatas"] else {},
-                        "distance": results["distances"][0][i] if results["distances"] else None,
-                        "rank": i + 1,
-                    })
 
             logger.info(
                 "rag_tool_executed",
                 tenant_id=self.tenant_id,
-                collection=self.rag_config.collection_name,
                 query_length=len(query),
-                results_count=len(documents),
+                results_count=result.get("total_results", 0),
+                backend="pgvector"
             )
 
-            return {
-                "success": True,
-                "query": query,
-                "documents": documents,
-                "total_results": len(documents),
-            }
+            return result
 
         except Exception as e:
             logger.error(
                 "rag_tool_execution_failed",
                 tenant_id=self.tenant_id,
-                collection=self.rag_config.collection_name,
                 error=str(e)
             )
             return {

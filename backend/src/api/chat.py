@@ -88,6 +88,7 @@ async def chat_endpoint(
             db=db,
             tenant_id=tenant_id,
             jwt_token=jwt_token,
+            session_id=str(session.session_id)  # Pass session_id for conversation memory
         )
 
         agent_response = await supervisor.route_message(request.message)
@@ -291,6 +292,7 @@ async def test_chat_endpoint(
             db=db,
             tenant_id=tenant_id,
             jwt_token=jwt_token,
+            session_id=str(session.session_id)  # Pass session_id for conversation memory
         )
 
         agent_response = await supervisor.route_message(request.message)
